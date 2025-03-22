@@ -1,0 +1,11 @@
+{
+  "type": "record",
+  "name": "BusData",
+  "fields": [
+    {"name": "bus_stop_id", "type": "int"},
+    {"name": "people_count", "type": "int"},
+    {"name": "temperature", "type": "float"},
+    {"name": "weather", "type": "string"},
+    {"name": "timestamp", "type": "string"}
+  ]
+}
