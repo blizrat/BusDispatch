@@ -1,33 +1,52 @@
-from confluent_kafka.avro import AvroConsumer
-import sys
+from confluent_kafka import Consumer
+from confluent_kafka.schema_registry import SchemaRegistryClient
+from confluent_kafka.schema_registry.avro import AvroDeserializer
+from confluent_kafka.serialization import SerializationContext, MessageField
 
-# Kafka + Schema Registry configuration
-consumer_config = {
+def dict_to_record(obj, ctx):
+    return obj
+
+# Kafka & Schema Registry config
+schema_registry_conf = {
+    'url': 'http://localhost:8081'
+}
+kafka_conf = {
     'bootstrap.servers': 'localhost:9092',
-    'group.id': 'bus-consumer-group',
-    'schema.registry.url': 'http://localhost:8081',
+    'group.id': 'live_dashboard_consumer',
     'auto.offset.reset': 'earliest'
 }
 
-# Create the AvroConsumer instance
-consumer = AvroConsumer(consumer_config)
+# Set up schema registry client and deserializer
+schema_registry_client = SchemaRegistryClient(schema_registry_conf)
+avro_deserializer = AvroDeserializer(
+    schema_registry_client=schema_registry_client,
+    schema_str=None,  # auto-fetch schema from Schema Registry
+    from_dict=dict_to_record
+)
 
-# Subscribe to your topic
+# Create Kafka consumer
+consumer = Consumer(kafka_conf)
 consumer.subscribe(['LIVE_DASHBOARD_STREAM'])
 
-print("🚌 Consuming messages from 'bus-topic'... Press Ctrl+C to stop.\n")
+print("🔄 Listening for messages on topic: LIVE_DASHBOARD_STREAM\n")
 
 try:
     while True:
-        msg = consumer.poll(1.0)  # timeout in seconds
+        msg = consumer.poll(1.0)
         if msg is None:
             continue
-        if msg.error():
-            print(f"⚠️ Error: {msg.error()}")
-        else:
-            value = msg.value()
-            print(f"✅ Received: {value}")
+
+        key = msg.key().decode('utf-8') if msg.key() else 'NULL'
+        value = avro_deserializer(msg.value(), SerializationContext(msg.topic(), MessageField.VALUE))
+
+        if value:
+            print(f"KEY: {key}")
+            print(f"  TOTAL_EXTRA_BUSES_SENT: {value['TOTAL_EXTRA_BUSES_SENT']}")
+            print(f"  AVG_TEMPERATURE:        {value['AVG_TEMPERATURE']}")
+            print(f"  AVG_PEOPLE_COUNT:       {value['AVG_PEOPLE_COUNT']}\n")
+
 except KeyboardInterrupt:
-    print("\n🛑 Stopping consumer...")
+    print("\n🛑 Stopped by user")
+
 finally:
     consumer.close()

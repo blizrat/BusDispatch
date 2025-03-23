@@ -1,0 +1,325 @@
+<!-- templates/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bus Dashboard</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        body {
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .dashboard-card {
+            margin-bottom: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .metric-value {
+            font-size: 2.5rem;
+            font-weight: bold;
+        }
+        .metric-title {
+            font-size: 1.2rem;
+            color: #6c757d;
+        }
+        .card-header {
+            border-radius: 10px 10px 0 0 !important;
+            background-color: #f8f9fa;
+        }
+        #update-time {
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+        .chart-container {
+            position: relative;
+            height: 300px;
+            width: 100%;
+        }
+        #connection-status {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            padding: 5px 10px;
+            border-radius: 5px;
+            display: none;
+        }
+        .connected {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .busiest-stop {
+            font-size: 1.5rem;
+            padding: 10px;
+            background-color: #ffe8cc;
+            border-radius: 5px;
+            text-align: center;
+            margin-bottom: 15px;
+        }
+        .highlight {
+            color: #fd7e14;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div id="connection-status"></div>
+
+    <div class="container">
+        <div class="row mb-4">
+            <div class="col-12">
+                <h1 class="text-center">Bus Transportation Dashboard</h1>
+                <p class="text-center text-muted">Real-time data from LIVE_DASHBOARD_STREAM</p>
+                <p class="text-center" id="update-time">Last updated: Never</p>
+            </div>
+        </div>
+
+        <!-- Busiest Stop Alert -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="busiest-stop">
+                    <span>🚨 Busiest Bus Stop: </span>
+                    <span class="highlight" id="busiest-stop-id">None</span>
+                    <span> with </span>
+                    <span class="highlight" id="busiest-stop-count">0</span>
+                    <span> people</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-4">
+                <div class="card dashboard-card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Extra Buses</h5>
+                    </div>
+                    <div class="card-body text-center">
+                        <div class="metric-value" id="buses-value">0</div>
+                        <div class="metric-title">Total Extra Buses Sent</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card dashboard-card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Temperature</h5>
+                    </div>
+                    <div class="card-body text-center">
+                        <div class="metric-value" id="temp-value">0.00</div>
+                        <div class="metric-title">Average Temperature (°C)</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card dashboard-card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Passenger Count</h5>
+                    </div>
+                    <div class="card-body text-center">
+                        <div class="metric-value" id="people-value">0.00</div>
+                        <div class="metric-title">Average People Count</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card dashboard-card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Historical Trend</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="chart-container">
+                            <canvas id="historyChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize variables
+        let chart;
+        let pollingInterval;
+        const POLLING_INTERVAL_MS = 1000; // Poll every second
+
+        // Initialize the chart
+        function initChart() {
+            const ctx = document.getElementById('historyChart').getContext('2d');
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        {
+                            label: 'Extra Buses',
+                            data: [],
+                            borderColor: 'rgba(75, 192, 192, 1)',
+                            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                            yAxisID: 'y',
+                            tension: 0.4
+                        },
+                        {
+                            label: 'Avg Temperature',
+                            data: [],
+                            borderColor: 'rgba(255, 99, 132, 1)',
+                            backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                            yAxisID: 'y1',
+                            tension: 0.4
+                        },
+                        {
+                            label: 'Avg People Count',
+                            data: [],
+                            borderColor: 'rgba(54, 162, 235, 1)',
+                            backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                            yAxisID: 'y2',
+                            tension: 0.4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Time'
+                            }
+                        },
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            title: {
+                                display: true,
+                                text: 'Extra Buses'
+                            }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            grid: {
+                                drawOnChartArea: false,
+                            },
+                            title: {
+                                display: true,
+                                text: 'Temperature (°C)'
+                            }
+                        },
+                        y2: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            grid: {
+                                drawOnChartArea: false,
+                            },
+                            title: {
+                                display: true,
+                                text: 'People Count'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Function to fetch data from the server
+        function fetchData() {
+            fetch('/api/data')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    showConnectionStatus(true);
+                    return response.json();
+                })
+                .then(data => {
+                    updateDashboard(data);
+                })
+                .catch(error => {
+                    console.error('Error fetching data:', error);
+                    showConnectionStatus(false);
+                });
+        }
+
+        // Function to update the dashboard with new data
+        function updateDashboard(data) {
+            // Update the numeric displays
+            document.getElementById('buses-value').textContent = data.total_extra_buses_sent;
+            document.getElementById('temp-value').textContent = data.avg_temperature.toFixed(2);
+            document.getElementById('people-value').textContent = data.avg_people_count.toFixed(2);
+
+            // Update busiest stop
+            document.getElementById('busiest-stop-id').textContent = data.busiest_stop.bus_stop_id || 'None';
+            document.getElementById('busiest-stop-count').textContent = data.busiest_stop.people_count.toLocaleString();
+
+            // Update the last update time
+            const updateTime = new Date();
+            document.getElementById('update-time').textContent = 'Last updated: ' + updateTime.toLocaleTimeString();
+
+            // Update the chart
+            updateChart(data.history);
+        }
+
+        // Function to update the chart with new data
+        function updateChart(history) {
+            if (!chart) return;
+
+            chart.data.labels = history.timestamps;
+            chart.data.datasets[0].data = history.buses;
+            chart.data.datasets[1].data = history.temperatures;
+            chart.data.datasets[2].data = history.people_counts;
+
+            chart.update();
+        }
+
+        // Function to show connection status
+        function showConnectionStatus(connected) {
+            const statusEl = document.getElementById('connection-status');
+            statusEl.style.display = 'block';
+
+            if (connected) {
+                statusEl.textContent = 'Connected';
+                statusEl.className = 'connected';
+                setTimeout(() => { statusEl.style.display = 'none'; }, 2000);
+            } else {
+                statusEl.textContent = 'Disconnected - Retrying...';
+                statusEl.className = 'disconnected';
+            }
+        }
+
+        // Initialize the dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize chart
+            initChart();
+
+            // Start polling
+            fetchData();
+            pollingInterval = setInterval(fetchData, POLLING_INTERVAL_MS);
+
+            // Clean up on page unload
+            window.addEventListener('beforeunload', function() {
+                if (pollingInterval) {
+                    clearInterval(pollingInterval);
+                }
+            });
+        });
+    </script>
+</body>
+</html>

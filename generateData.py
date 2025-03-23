@@ -56,6 +56,6 @@ try:
         data = generate_event()
         producer.produce(topic=topic, key=str(data["bus_stop_id"]), value=data, on_delivery=delivery_report)
         producer.flush()
-        time.sleep(10)
+        time.sleep(1)
 except KeyboardInterrupt:
     print("🛑 Stopped producing.")
