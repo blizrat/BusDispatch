@@ -1,4 +1,4 @@
-# BusDispatch
+# Bus Dispatch System
 
 ## Project Overview
 Public transportation systems often struggle with uneven demand across bus stops, leading to overcrowding and inefficient resource allocation. This project aims to solve that by automatically dispatching extra buses when the crowd at a bus stand exceeds the regular bus capacity.
